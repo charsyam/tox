@@ -29,4 +29,4 @@ pub mod net_crypto;
 pub mod utils;
 pub mod friend_connection;
 pub mod stats;
-pub mod transfer_file;
+pub mod messenger;
