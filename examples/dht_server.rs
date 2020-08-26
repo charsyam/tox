@@ -28,7 +28,8 @@ fn as_packed_node(pk: &str, saddr: &str) -> PackedNode {
     PackedNode::new(saddr, &pk)
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     if crypto_init().is_err() {
@@ -60,28 +61,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         server.add_initial_bootstrap(bootstrap_pn);
     }
 
-    let future = async move {
-        let socket = common::bind_socket(local_addr).await;
-        let server_fut = server.run_socket(socket, rx, stats)
-            .boxed();
-        let res =
-            futures::select! {
-                res = server_fut.fuse() => res,
-                res = lan_discovery_sender.run().fuse() =>
-                    res.map_err(|e| Error::new(ErrorKind::Other, e.compat()))
-            };
-
-        if let Err(ref e) = res {
-            error!("Processing ended with error: {:?}", e)
-        }
-
-        res
+    let socket = common::bind_socket(local_addr).await;
+    let res = futures::select! {
+        res = server.run_socket(socket, rx, stats).fuse() => res,
+        res = lan_discovery_sender.run().fuse() =>
+            res.map_err(|e| Error::new(ErrorKind::Other, e.compat()))
     };
 
-    info!("Running DHT server on {}", local_addr);
+    if let Err(ref e) = res {
+        error!("Processing ended with error: {:?}", e)
+    }
 
-    let mut runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(future)?;
+    info!("Running DHT server on {}", local_addr);
 
     Ok(())
 }
